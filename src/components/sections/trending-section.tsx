@@ -18,7 +18,7 @@ import Link from 'next/link';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface Product {
@@ -38,7 +38,6 @@ interface Product {
   reviews?: number;
   badge?: string;
   views?: number;
-  soldCount?: number;
 }
 
 export default function TrendingSection() {
@@ -51,20 +50,24 @@ export default function TrendingSection() {
   useEffect(() => {
     const fetchTrendingProducts = async () => {
       try {
-        // Fetch products with high ratings and reviews (trending indicators)
+        // Simplified query to avoid index issues
         const q = query(
           collection(db, 'products'),
-          orderBy('rating', 'desc'),
-          limit(8)
+          limit(20) // Get more products to sort client-side
         );
         
         const snapshot = await getDocs(q);
-        const products = snapshot.docs.map(doc => ({ 
+        let products = snapshot.docs.map(doc => ({ 
           _id: doc.id, 
           ...doc.data(),
-          views: Math.floor(Math.random() * 1000) + 100, // Mock data
-          soldCount: Math.floor(Math.random() * 50) + 5 // Mock data
+          views: doc.data().views || 0
         })) as Product[];
+
+        // Filter active products and sort by views client-side
+        products = products
+          .filter(product => product.isActive === true)
+          .sort((a, b) => (b.views || 0) - (a.views || 0))
+          .slice(0, 8); // Take top 8
 
         setTrendingProducts(products);
       } catch (error) {
@@ -77,6 +80,17 @@ export default function TrendingSection() {
 
     fetchTrendingProducts();
   }, []);
+
+  const incrementViews = async (productId: string) => {
+    try {
+      const productRef = doc(db, 'products', productId);
+      await updateDoc(productRef, {
+        views: increment(1)
+      });
+    } catch (error) {
+      console.error('Failed to increment views:', error);
+    }
+  };
 
   const handleAddToCart = (item: Product) => {
     addToCart({
@@ -99,8 +113,8 @@ export default function TrendingSection() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-64 mb-8"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              {[...Array(8)].map((_, i) => (
                 <div key={i} className="bg-gray-200 aspect-[3/4] rounded-lg"></div>
               ))}
             </div>
@@ -129,134 +143,79 @@ export default function TrendingSection() {
         </div>
 
         {/* Trending Products Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {trendingProducts.map((product, index) => (
-            <Card key={product._id} className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-0 shadow-sm relative">
-              {/* Trending Badge */}
-              {index < 3 && (
-                <div className="absolute top-3 left-3 z-10">
-                  <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white border-0 flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" />
+            <Card key={product._id} className="group hover:shadow-lg transition-shadow duration-300">
+              <div className="relative overflow-hidden rounded-t-lg flex items-center justify-center bg-gray-200" style={{ width: 160, height: 200, margin: '0 auto' }}>
+                <img
+                  src={Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image}
+                  alt={product.name}
+                  className="object-cover group-hover:scale-105 transition-transform duration-300 rounded"
+                  style={{ width: 160, height: 200 }}
+                />
+                {index < 3 && (
+                  <Badge className="absolute top-2 left-2 bg-gradient-to-r from-orange-500 to-red-500 text-white">
                     #{index + 1} Trending
                   </Badge>
-                </div>
-              )}
-
-              <CardContent className="p-0">
-                {/* Image Container */}
-                <div className="relative overflow-hidden">
-                  <div className="aspect-[4/5] bg-gray-200 relative">
-                    <div 
-                      className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500"
-                      style={{ backgroundImage: `url(${Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image})` }}
-                    />
-                  </div>
-                  
-                  {/* Badges */}
-                  <div className="absolute top-3 right-3 flex flex-col gap-2">
-                    {product.badge && (
-                      <Badge className="bg-orange-600 text-white border-0">
-                        {product.badge}
-                      </Badge>
-                    )}
-                    {product.vintage && (
-                      <Badge className="bg-purple-600 text-white border-0">
-                        Vintage
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <Button size="sm" variant="secondary" className="w-8 h-8 p-0 rounded-full bg-white/90 hover:bg-white">
-                      <Heart className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="secondary" 
-                      className="w-8 h-8 p-0 rounded-full bg-white/90 hover:bg-white"
-                      asChild
-                    >
-                      <Link href={`/clothes/${encodeURIComponent(product.name)}`}>
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                    </Button>
-                  </div>
-
-                  {/* Social Proof Overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-white text-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        <span>{product.views} views</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        <span>{product.soldCount} sold</span>
-                      </div>
-                    </div>
-                  </div>
+                )}
+                {product.badge && (
+                  <Badge className="absolute top-2 right-2 bg-orange-600 text-white">
+                    {product.badge}
+                  </Badge>
+                )}
+                {product.vintage && (
+                  <Badge className="absolute top-2 right-2 bg-purple-600 text-white">
+                    Vintage
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white"
+                >
+                  <Heart className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <CardContent className="p-4">
+                <div className="mb-2">
+                  <Link href={`/clothes/${encodeURIComponent(product.name)}`} onClick={() => incrementViews(product._id)}>
+                    <h3 className="font-semibold text-lg line-clamp-2 mb-1 hover:text-orange-600 transition-colors cursor-pointer">{product.name}</h3>
+                  </Link>
+                  <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
                 </div>
                 
-                {/* Content */}
-                <div className="p-4">
-                  <div className="space-y-2">
-                    {/* Category */}
-                    <p className="text-sm text-gray-500 uppercase tracking-wide">
-                      {product.category}
-                    </p>
-                    
-                    {/* Title */}
-                    <Link href={`/clothes/${encodeURIComponent(product.name)}`}>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors cursor-pointer line-clamp-2">
-                        {product.name}
-                      </h3>
-                    </Link>
-                    
-                    {/* Rating */}
-                    <div className="flex items-center gap-1">
-                      <div className="flex items-center">
-                        {[...Array(5)].map((_, i) => (
-                          <Star 
-                            key={i} 
-                            className={`w-4 h-4 ${i < Math.floor(product.rating || 4.5) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
-                          />
-                        ))}
-                      </div>
-                      <span className="text-sm text-gray-600 ml-1">
-                        ({product.reviews || 0})
-                      </span>
-                    </div>
-                    
-                    {/* Price */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-orange-600">
-                        ₹{product.price.toLocaleString('en-IN')}
-                      </span>
-                      <span className="text-sm text-gray-500 line-through">
-                        ₹{product.originalPrice.toLocaleString('en-IN')}
-                      </span>
-                      <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                        {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
-                      </Badge>
-                    </div>
-                    
-                    {/* Condition */}
-                    <p className="text-sm text-gray-600">
-                      Condition: <span className="font-medium capitalize">{product.condition}</span>
-                    </p>
-
-                    {/* Buy Now Button */}
-                    <Button 
-                      className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white"
-                      onClick={() => handleAddToCart(product)}
-                      disabled={product.stock === 0}
-                    >
-                      <ShoppingBag className="w-4 h-4 mr-2" />
-                      {product.stock === 0 ? 'Out of Stock' : 'Buy Now'}
-                    </Button>
-                  </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="secondary" className="text-xs">
+                    {product.condition}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {product.category}
+                  </Badge>
                 </div>
+                
+                <div className="flex items-center gap-1 mb-3">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  <span className="text-sm font-medium">{product.rating || 4.5}</span>
+                  <span className="text-sm text-gray-500">({product.reviews || 0})</span>
+                </div>
+                
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg font-bold text-orange-600">₹{product.price}</span>
+                  {product.originalPrice > product.price && (
+                    <span className="text-sm text-gray-500 line-through">₹{product.originalPrice}</span>
+                  )}
+                </div>
+                
+
+                
+                <Button
+                  onClick={() => handleAddToCart(product)}
+                  disabled={product.stock === 0}
+                  className={product.stock === 0 ? 'opacity-50 cursor-not-allowed w-full' : 'w-full'}
+                >
+                  {product.stock === 0 ? 'Out of Stock' : 'Buy Now'}
+                </Button>
               </CardContent>
             </Card>
           ))}

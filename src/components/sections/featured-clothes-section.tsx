@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface Product {
@@ -28,6 +28,7 @@ interface Product {
   rating?: number;
   reviews?: number;
   badge?: string;
+  created_at?: string;
 }
 
 // Fallback data in case API fails
@@ -130,16 +131,7 @@ const fallbackClothes = [
   }
 ];
 
-// Fade-in animation CSS
-const fadeInStyle = {
-  animation: 'fadeIn 0.5s ease',
-};
 
-if (typeof window !== 'undefined') {
-  const style = document.createElement('style');
-  style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateY(20px);} to { opacity: 1; transform: none;} }`;
-  document.head.appendChild(style);
-}
 
 export default function FeaturedClothesSection() {
   // Always declare all hooks at the top, before any early returns
@@ -154,10 +146,21 @@ export default function FeaturedClothesSection() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        // Fetch products from Firestore
-        const q = query(collection(db, 'products'), orderBy('created_at', 'desc'), limit(6));
+        // Simplified query to avoid index issues
+        const q = query(collection(db, 'products'), limit(10));
         const snapshot = await getDocs(q);
-        const products = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+        let products = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() })) as Product[];
+        
+        // Filter active products and sort by creation date client-side
+        products = products
+          .filter(product => product.isActive === true)
+          .sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+          })
+          .slice(0, 6);
+          
         setFeaturedClothes(products.length > 0 ? products : fallbackClothes);
       } catch (error) {
         console.error('Failed to fetch products from Firestore:', error);
@@ -206,7 +209,7 @@ export default function FeaturedClothesSection() {
               Loading amazing thrifted pieces...
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
                 <div className="bg-gray-200 aspect-[4/5] rounded-lg mb-4"></div>
@@ -238,7 +241,7 @@ export default function FeaturedClothesSection() {
         </div>
 
         {/* Featured Items Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {productsToShow.map((item) => {
             const imagesArr = Array.isArray(item.images) && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
             const showImage = hoveredProductId === (item.id || item._id) && imagesArr.length > 1 ? imagesArr[1] : imagesArr[0];
@@ -250,105 +253,76 @@ export default function FeaturedClothesSection() {
             return (
               <Card
                 key={item._id}
-                className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-0 shadow-sm"
-                style={fadeInStyle}
+                className="group hover:shadow-lg transition-shadow duration-300"
                 onMouseEnter={() => setHoveredProductId((item.id ?? item._id) ?? null)}
                 onMouseLeave={() => setHoveredProductId(null)}
               >
-                {/* Image Container */}
-                <div className="relative overflow-hidden">
-                  <div className="bg-gray-200 relative flex items-center justify-center" style={{ width: 160, height: 200, margin: '0 auto' }}>
-                    <img
-                      src={showImage}
-                      alt={item.name}
-                      className="object-cover group-hover:scale-105 transition-transform duration-500 rounded"
-                      style={{ width: 160, height: 200, display: 'block', margin: 'auto' }}
-                    />
-                  </div>
-                  
-                  {/* Badge */}
-                  <Badge className="absolute top-3 left-3 bg-orange-600 text-white border-0">
-                    {item.badge || 'Featured'}
-                  </Badge>
-                  
-                  {/* Quick Actions */}
-                  <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <Button size="sm" variant="secondary" className="w-8 h-8 p-0 rounded-full bg-white/90 hover:bg-white">
-                      <Heart className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="secondary" 
-                      className="w-8 h-8 p-0 rounded-full bg-white/90 hover:bg-white"
-                      asChild
-                    >
-                      <Link href={`/clothes/${encodeURIComponent(item.name)}`}>
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  
+                <div className="relative overflow-hidden rounded-t-lg flex items-center justify-center bg-gray-200" style={{ width: 160, height: 200, margin: '0 auto' }}>
+                  <img
+                    src={showImage}
+                    alt={item.name}
+                    className="object-cover group-hover:scale-105 transition-transform duration-300 rounded"
+                    style={{ width: 160, height: 200 }}
+                  />
+                  {item.badge && (
+                    <Badge className="absolute top-2 left-2 bg-orange-600 text-white">
+                      {item.badge}
+                    </Badge>
+                  )}
+                  {item.vintage && (
+                    <Badge className="absolute top-2 right-2 bg-purple-600 text-white">
+                      Vintage
+                    </Badge>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white"
+                  >
+                    <Heart className="h-4 w-4" />
+                  </Button>
                 </div>
                 
-                {/* Content */}
-                <div className="p-4">
-                  <div className="space-y-2">
-                    {/* Category */}
-                    <p className="text-sm text-gray-500 uppercase tracking-wide">
-                      {item.category}
-                    </p>
-                    
-                    {/* Title */}
+                <CardContent className="p-4">
+                  <div className="mb-2">
                     <Link href={`/clothes/${encodeURIComponent(item.name)}`}>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors cursor-pointer">
-                        {item.name}
-                      </h3>
+                      <h3 className="font-semibold text-lg line-clamp-2 mb-1 hover:text-orange-600 transition-colors cursor-pointer">{item.name}</h3>
                     </Link>
-                    
-                    {/* Buy Now Button */}
-                    <Button 
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                      onClick={() => handleAddToCart(item)}
-                      disabled={item.stock === 0}
-                    >
-                      <ShoppingBag className="w-4 h-4 mr-2" />
-                      {item.stock === 0 ? 'Out of Stock' : 'Buy Now'}
-                    </Button>
-                    
-                    {/* Rating */}
-                    <div className="flex items-center gap-1">
-                      <div className="flex items-center">
-                        {[...Array(5)].map((_, i) => (
-                          <Star 
-                            key={i} 
-                            className={`w-4 h-4 ${i < Math.floor(item.rating || 4.5) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
-                          />
-                        ))}
-                      </div>
-                      <span className="text-sm text-gray-600 ml-1">
-                        ({item.reviews || 0})
-                      </span>
-                    </div>
-                    
-                    {/* Price */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-orange-600">
-                        ₹{item.price.toLocaleString('en-IN')}
-                      </span>
-                      <span className="text-sm text-gray-500 line-through">
-                        ₹{item.originalPrice.toLocaleString('en-IN')}
-                      </span>
-                      <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                        {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
-                      </Badge>
-                    </div>
-                    
-                    {/* Condition */}
-                    <p className="text-sm text-gray-600">
-                      Condition: <span className="font-medium">{item.condition}</span>
-                    </p>
+                    <p className="text-sm text-gray-600 line-clamp-2">{item.description}</p>
                   </div>
-                </div>
+                  
+                  <div className="flex items-center gap-2 mb-3">
+                    <Badge variant="secondary" className="text-xs">
+                      {item.condition}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {item.category}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 mb-3">
+                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    <span className="text-sm font-medium">{item.rating || 4.5}</span>
+                    <span className="text-sm text-gray-500">({item.reviews || 0})</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg font-bold text-orange-600">₹{item.price}</span>
+                    {item.originalPrice > item.price && (
+                      <span className="text-sm text-gray-500 line-through">₹{item.originalPrice}</span>
+                    )}
+                  </div>
+                  
+
+                  
+                  <Button
+                    onClick={() => handleAddToCart(item)}
+                    disabled={item.stock === 0}
+                    className={item.stock === 0 ? 'opacity-50 cursor-not-allowed w-full' : 'w-full'}
+                  >
+                    {item.stock === 0 ? 'Out of Stock' : 'Buy Now'}
+                  </Button>
+                </CardContent>
               </Card>
             );
           })}

@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query } from 'firebase/firestore';
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice: number;
+  image: string;
+  images?: string[];
+  category: string;
+  condition: string;
+  vintage: boolean;
+  stock: number;
+  isActive: boolean;
+  rating?: number;
+  reviews?: number;
+  badge?: string;
+  created_at?: string;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,26 +28,45 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category');
     const condition = searchParams.get('condition');
-    const q = collection(db, 'products');
-    let firestoreQuery = query(q, orderBy('created_at', 'desc'));
-    // Filtering (simple, can be extended)
-    if (search) {
-      // Firestore doesn't support full text search, so this is a simple filter
-      // For production, use Algolia or similar
-    }
-    if (category && category !== 'all') {
-      firestoreQuery = query(firestoreQuery, where('category', '==', category));
-    }
-    if (condition && condition !== 'all') {
-      firestoreQuery = query(firestoreQuery, where('condition', '==', condition));
-    }
-    // Only apply limit if specified
+    
+    // Simplified query to avoid index issues
+    let firestoreQuery = query(collection(db, 'products'));
+    
+    // Apply limit if specified
     if (limitParam) {
       const { limit } = await import('firebase/firestore');
-      firestoreQuery = query(firestoreQuery, limit(parseInt(limitParam, 10)));
+      firestoreQuery = query(firestoreQuery, limit(parseInt(limitParam, 10) * 2)); // Get more to filter client-side
     }
+    
     const snapshot = await getDocs(firestoreQuery);
-    const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+    
+    // Apply filters client-side
+    if (category && category !== 'all') {
+      products = products.filter(product => product.category?.toLowerCase() === category.toLowerCase());
+    }
+    if (condition && condition !== 'all') {
+      products = products.filter(product => product.condition?.toLowerCase() === condition.toLowerCase());
+    }
+    if (search) {
+      products = products.filter(product => 
+        product.name?.toLowerCase().includes(search.toLowerCase()) ||
+        product.description?.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    
+    // Sort by creation date client-side
+    products.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+    
+    // Apply final limit
+    if (limitParam) {
+      products = products.slice(0, parseInt(limitParam, 10));
+    }
+    
     return NextResponse.json({ products, total: products.length, page: 1, limit: limitParam ? parseInt(limitParam, 10) : products.length });
   } catch (error) {
     console.error('API /api/products error:', error);

@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRef, useCallback } from 'react';
-// Remove SWR and use manual fetch for progressive loading
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -35,18 +34,6 @@ interface Product {
   rating?: number;
   reviews?: number;
   badge?: string;
-}
-
-// Fade-in animation CSS
-const fadeInStyle = {
-  animation: 'fadeIn 0.5s ease',
-};
-
-// Add global style for fadeIn keyframes
-if (typeof window !== 'undefined') {
-  const style = document.createElement('style');
-  style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateY(20px);} to { opacity: 1; transform: none;} }`;
-  document.head.appendChild(style);
 }
 
 export default function ClothesPage() {
@@ -146,7 +133,7 @@ export default function ClothesPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {uniqueProducts.map((product) => {
               const imagesArr = Array.isArray(product.images) && product.images.length > 0 ? product.images : (product.image ? [product.image] : []);
               const showImage = hoveredProductId === (product.id || product._id) && imagesArr.length > 1 ? imagesArr[1] : imagesArr[0];
@@ -159,7 +146,6 @@ export default function ClothesPage() {
                 <Card
                   key={product.id || product._id}
                   className="group hover:shadow-lg transition-shadow duration-300"
-                  style={fadeInStyle}
                   onMouseEnter={() => setHoveredProductId((product.id ?? product._id) ?? null)}
                   onMouseLeave={() => setHoveredProductId(null)}
                 >
@@ -197,7 +183,7 @@ export default function ClothesPage() {
                       <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
                     </div>
                     
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <Badge variant="secondary" className="text-xs">
                         {product.condition}
                       </Badge>
@@ -206,7 +192,7 @@ export default function ClothesPage() {
                       </Badge>
                     </div>
                     
-                    <div className="flex items-center gap-1 mb-2">
+                    <div className="flex items-center gap-1 mb-3">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                       <span className="text-sm font-medium">{product.rating || 4.5}</span>
                       <span className="text-sm text-gray-500">({product.reviews || 0})</span>
@@ -226,7 +212,7 @@ export default function ClothesPage() {
                         <span className="text-red-600">Out of Stock</span>
                       )}
                     </div>
-                    <Button
+                                      <Button
                       onClick={() => handleAddToCart(product)}
                       disabled={product.stock === 0}
                       className={product.stock === 0 ? 'opacity-50 cursor-not-allowed w-full' : 'w-full'}

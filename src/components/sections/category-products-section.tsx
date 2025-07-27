@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface Product {
@@ -86,28 +86,12 @@ export default function CategoryProductsSection({
   useEffect(() => {
     const fetchProducts = async () => {
       try {
+        // Simplified query to avoid composite index issues
         let q = query(
           collection(db, 'products'),
           where('category', '==', category.toLowerCase()),
-          where('isActive', '==', true),
-          limit(maxProducts)
+          limit(maxProducts * 2) // Get more products to filter client-side
         );
-
-        // Apply sorting
-        switch (sortBy) {
-          case 'newest':
-            q = query(q, orderBy('createdAt', 'desc'));
-            break;
-          case 'price-low':
-            q = query(q, orderBy('price', 'asc'));
-            break;
-          case 'price-high':
-            q = query(q, orderBy('price', 'desc'));
-            break;
-          case 'rating':
-            q = query(q, orderBy('rating', 'desc'));
-            break;
-        }
 
         const snapshot = await getDocs(q);
         let fetchedProducts = snapshot.docs.map(doc => ({ 
@@ -116,12 +100,36 @@ export default function CategoryProductsSection({
           createdAt: doc.data().createdAt?.toDate?.() || new Date()
         })) as Product[];
 
+        // Apply filters client-side
+        fetchedProducts = fetchedProducts.filter(product => 
+          product.isActive === true
+        );
+
         // Apply condition filter
         if (filterCondition !== 'all') {
           fetchedProducts = fetchedProducts.filter(product => 
             product.condition.toLowerCase() === filterCondition.toLowerCase()
           );
         }
+
+        // Apply sorting client-side
+        switch (sortBy) {
+          case 'newest':
+            fetchedProducts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            break;
+          case 'price-low':
+            fetchedProducts.sort((a, b) => a.price - b.price);
+            break;
+          case 'price-high':
+            fetchedProducts.sort((a, b) => b.price - a.price);
+            break;
+          case 'rating':
+            fetchedProducts.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            break;
+        }
+
+        // Limit to maxProducts
+        fetchedProducts = fetchedProducts.slice(0, maxProducts);
 
         setProducts(fetchedProducts);
       } catch (error) {
@@ -171,7 +179,7 @@ export default function CategoryProductsSection({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-64 mb-8"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="bg-gray-200 aspect-[3/4] rounded-lg"></div>
               ))}
@@ -243,110 +251,74 @@ export default function CategoryProductsSection({
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {products.map((product) => (
-            <Card key={product._id} className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-0 shadow-sm">
-              <CardContent className="p-0">
-                {/* Image Container */}
-                <div className="relative overflow-hidden">
-                  <div className="aspect-[4/5] bg-gray-200 relative">
-                    <div 
-                      className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500"
-                      style={{ backgroundImage: `url(${Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image})` }}
-                    />
-                  </div>
-                  
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-2">
-                    {product.badge && (
-                      <Badge className="bg-orange-600 text-white border-0">
-                        {product.badge}
-                      </Badge>
-                    )}
-                    {product.vintage && (
-                      <Badge className="bg-purple-600 text-white border-0">
-                        Vintage
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <Button size="sm" variant="secondary" className="w-8 h-8 p-0 rounded-full bg-white/90 hover:bg-white">
-                      <Heart className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="secondary" 
-                      className="w-8 h-8 p-0 rounded-full bg-white/90 hover:bg-white"
-                      asChild
-                    >
-                      <Link href={`/clothes/${encodeURIComponent(product.name)}`}>
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                    </Button>
-                  </div>
+            <Card key={product._id} className="group hover:shadow-lg transition-shadow duration-300">
+              <div className="relative overflow-hidden rounded-t-lg flex items-center justify-center bg-gray-200" style={{ width: 160, height: 200, margin: '0 auto' }}>
+                <img
+                  src={Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image}
+                  alt={product.name}
+                  className="object-cover group-hover:scale-105 transition-transform duration-300 rounded"
+                  style={{ width: 160, height: 200 }}
+                />
+                {product.badge && (
+                  <Badge className="absolute top-2 left-2 bg-orange-600 text-white">
+                    {product.badge}
+                  </Badge>
+                )}
+                {product.vintage && (
+                  <Badge className="absolute top-2 right-2 bg-purple-600 text-white">
+                    Vintage
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white"
+                >
+                  <Heart className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <CardContent className="p-4">
+                <div className="mb-2">
+                  <Link href={`/clothes/${encodeURIComponent(product.name)}`}>
+                    <h3 className="font-semibold text-lg line-clamp-2 mb-1 hover:text-orange-600 transition-colors cursor-pointer">{product.name}</h3>
+                  </Link>
+                  <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
                 </div>
                 
-                {/* Content */}
-                <div className="p-4">
-                  <div className="space-y-2">
-                    {/* Category */}
-                    <p className="text-sm text-gray-500 uppercase tracking-wide">
-                      {product.category}
-                    </p>
-                    
-                    {/* Title */}
-                    <Link href={`/clothes/${encodeURIComponent(product.name)}`}>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors cursor-pointer line-clamp-2">
-                        {product.name}
-                      </h3>
-                    </Link>
-                    
-                    {/* Rating */}
-                    <div className="flex items-center gap-1">
-                      <div className="flex items-center">
-                        {[...Array(5)].map((_, i) => (
-                          <Star 
-                            key={i} 
-                            className={`w-4 h-4 ${i < Math.floor(product.rating || 4.5) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
-                          />
-                        ))}
-                      </div>
-                      <span className="text-sm text-gray-600 ml-1">
-                        ({product.reviews || 0})
-                      </span>
-                    </div>
-                    
-                    {/* Price */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-orange-600">
-                        ₹{product.price.toLocaleString('en-IN')}
-                      </span>
-                      <span className="text-sm text-gray-500 line-through">
-                        ₹{product.originalPrice.toLocaleString('en-IN')}
-                      </span>
-                      <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                        {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
-                      </Badge>
-                    </div>
-                    
-                    {/* Condition */}
-                    <p className="text-sm text-gray-600">
-                      Condition: <span className="font-medium capitalize">{product.condition}</span>
-                    </p>
-
-                    {/* Buy Now Button */}
-                    <Button 
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                      onClick={() => handleAddToCart(product)}
-                      disabled={product.stock === 0}
-                    >
-                      <ShoppingBag className="w-4 h-4 mr-2" />
-                      {product.stock === 0 ? 'Out of Stock' : 'Buy Now'}
-                    </Button>
-                  </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="secondary" className="text-xs">
+                    {product.condition}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {product.category}
+                  </Badge>
                 </div>
+                
+                <div className="flex items-center gap-1 mb-3">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  <span className="text-sm font-medium">{product.rating || 4.5}</span>
+                  <span className="text-sm text-gray-500">({product.reviews || 0})</span>
+                </div>
+                
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg font-bold text-orange-600">₹{product.price}</span>
+                  {product.originalPrice > product.price && (
+                    <span className="text-sm text-gray-500 line-through">₹{product.originalPrice}</span>
+                  )}
+                </div>
+                
+
+                
+                <Button
+                  onClick={() => handleAddToCart(product)}
+                  disabled={product.stock === 0}
+                  className={product.stock === 0 ? 'opacity-50 cursor-not-allowed w-full' : 'w-full'}
+                >
+                  {product.stock === 0 ? 'Out of Stock' : 'Buy Now'}
+                </Button>
               </CardContent>
             </Card>
           ))}

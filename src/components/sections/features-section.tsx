@@ -10,12 +10,10 @@ import {
   Heart, 
   Star, 
   Users, 
-  Award, 
   Zap,
   CheckCircle,
   Clock,
-  MapPin,
-  Phone
+  MapPin
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -70,12 +68,7 @@ const features = [
   }
 ];
 
-const stats = [
-  { number: '10K+', label: 'Happy Customers', icon: Users },
-  { number: '50K+', label: 'Items Sold', icon: Award },
-  { number: '95%', label: 'Satisfaction Rate', icon: Star },
-  { number: '24/7', label: 'Customer Support', icon: Phone }
-];
+
 
 export default function FeaturesSection() {
   return (
@@ -117,38 +110,7 @@ export default function FeaturesSection() {
           })}
         </div>
 
-        {/* Stats Section */}
-        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl p-8 mb-16">
-          <div className="text-center mb-8">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              Our Impact in Numbers
-            </h3>
-            <p className="text-gray-600">
-              Join thousands of customers who trust us for their sustainable fashion needs
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, index) => {
-              const IconComponent = stat.icon;
-              return (
-                <div key={index} className="text-center">
-                  <div className="flex justify-center mb-3">
-                    <div className="p-3 rounded-full bg-white shadow-sm">
-                      <IconComponent className="w-6 h-6 text-orange-600" />
-                    </div>
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900 mb-1">
-                    {stat.number}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {stat.label}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+
 
         {/* How It Works */}
         <div className="text-center mb-12">
