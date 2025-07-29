@@ -21,14 +21,25 @@ interface CartContextType {
   totalItems: number;
   totalPrice: number;
   getItemQuantity: (itemId: string) => number;
+  // Coupon functionality
+  couponCode: string;
+  isCouponApplied: boolean;
+  couponDiscount: number;
+  applyCoupon: (code: string) => boolean;
+  removeCoupon: () => void;
+  finalTotal: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = 'meditrack_cart';
+const COUPON_STORAGE_KEY = 'meditrack_coupon';
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [couponCode, setCouponCode] = useState<string>('');
+  const [isCouponApplied, setIsCouponApplied] = useState<boolean>(false);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -63,6 +74,22 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     fetchCart();
   }, [user]);
 
+  // Load coupon from localStorage
+  useEffect(() => {
+    const storedCoupon = localStorage.getItem(COUPON_STORAGE_KEY);
+    if (storedCoupon) {
+      try {
+        const couponData = JSON.parse(storedCoupon);
+        setCouponCode(couponData.code || '');
+        setIsCouponApplied(couponData.applied || false);
+        setCouponDiscount(couponData.discount || 0);
+      } catch (error) {
+        console.error('Error parsing coupon from localStorage:', error);
+        localStorage.removeItem(COUPON_STORAGE_KEY);
+      }
+    }
+  }, []);
+
   // Save cart to server or localStorage whenever items change
   useEffect(() => {
     if (user) {
@@ -92,6 +119,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   }, [items, user, toast]);
+
+  // Save coupon to localStorage whenever coupon state changes
+  useEffect(() => {
+    if (couponCode || isCouponApplied) {
+      localStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify({
+        code: couponCode,
+        applied: isCouponApplied,
+        discount: couponDiscount
+      }));
+    } else {
+      localStorage.removeItem(COUPON_STORAGE_KEY);
+    }
+  }, [couponCode, isCouponApplied, couponDiscount]);
 
   const getItemQuantity = (itemId: string) => {
     const item = items.find(item => item.id === itemId);
@@ -142,12 +182,61 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  // Coupon functionality
+  const applyCoupon = (code: string): boolean => {
+    const upperCode = code.toUpperCase().trim();
+    
+    if (upperCode === '1NCEMORE') {
+      setCouponCode(upperCode);
+      setIsCouponApplied(true);
+      setCouponDiscount(20); // 20 rupees discount
+      toast({
+        title: "Coupon Applied!",
+        description: "You've got ₹20 off your order!",
+      });
+      return true;
+    } else {
+      toast({
+        title: "Invalid Coupon",
+        description: "Please enter a valid coupon code.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const removeCoupon = () => {
+    setCouponCode('');
+    setIsCouponApplied(false);
+    setCouponDiscount(0);
+    toast({
+      title: "Coupon Removed",
+      description: "Coupon has been removed from your order.",
+    });
+  };
+
   const totalItems = items.reduce((total, item) => total + item.quantity, 0);
   const totalPrice = items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const finalTotal = Math.max(0, totalPrice - couponDiscount); // Ensure total doesn't go below 0
 
   return (
     <CartContext.Provider
-      value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, getItemQuantity }}
+      value={{ 
+        items, 
+        addToCart, 
+        removeFromCart, 
+        updateQuantity, 
+        clearCart, 
+        totalItems, 
+        totalPrice, 
+        getItemQuantity,
+        couponCode,
+        isCouponApplied,
+        couponDiscount,
+        applyCoupon,
+        removeCoupon,
+        finalTotal
+      }}
     >
       {children}
     </CartContext.Provider>

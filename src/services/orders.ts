@@ -48,6 +48,8 @@ export interface Order {
   shippingAddress: ShippingAddress;
   paymentMethod: string;
   upiId?: string;
+  couponCode?: string; // Added coupon code
+  couponDiscount?: number; // Added coupon discount amount
   createdAt: string;
   status: OrderStatus;
   assignedTo?: string | null;
